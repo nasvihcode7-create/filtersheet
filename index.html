@@ -142,29 +142,35 @@
 
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 16px;
             margin: 40px 0;
         }
 
         .stat-card {
             background: #1d1d1f;
-            padding: 30px;
+            padding: 24px 20px;
             border: 1px solid #424245;
             text-align: center;
+            transition: all 0.2s ease;
+        }
+
+        .stat-card:hover {
+            border-color: #86868b;
+            transform: translateY(-2px);
         }
 
         .stat-label {
-            font-size: 13px;
+            font-size: 11px;
             color: #86868b;
             text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 8px;
-            font-weight: 500;
+            letter-spacing: 1.2px;
+            margin-bottom: 12px;
+            font-weight: 600;
         }
 
         .stat-value {
-            font-size: 48px;
+            font-size: 40px;
             font-weight: 600;
             color: #f5f5f7;
             letter-spacing: -1px;
@@ -278,12 +284,28 @@
                     <div class="stat-value" id="outputRows">0</div>
                 </div>
                 <div class="stat-card">
+                    <div class="stat-label">Duplicates Removed</div>
+                    <div class="stat-value" id="duplicatesRemoved">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Unique Companies</div>
+                    <div class="stat-value" id="uniqueCompanies">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">With Number</div>
+                    <div class="stat-value" id="withNumber">0</div>
+                </div>
+                <div class="stat-card">
                     <div class="stat-label">With Email</div>
                     <div class="stat-value" id="withEmail">0</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-label">With Website</div>
                     <div class="stat-value" id="withWebsite">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Complete Records</div>
+                    <div class="stat-value" id="completeRecords">0</div>
                 </div>
             </div>
         </div>
@@ -407,12 +429,14 @@
                 return null;
             }
             
-            if (str.match(/^(https?:\/\/|www\.)/i)) {
-                return str;
-            }
+            // Remove https://, http://, and www. prefixes
+            let cleaned = str;
+            cleaned = cleaned.replace(/^https?:\/\//i, '');
+            cleaned = cleaned.replace(/^www\./i, '');
             
-            if (str.match(/^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]?\.[a-zA-Z]{2,}$/)) {
-                return str;
+            // Check if it looks like a domain
+            if (cleaned.match(/^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]?\.[a-zA-Z]{2,}/)) {
+                return cleaned;
             }
             
             return null;
@@ -468,19 +492,35 @@
 
             // Deduplicate by phone, email, and website combinations
             const uniqueData = {};
+            const usedEmails = new Set();
+            const usedWebsites = new Set();
             
             allRows.forEach(row => {
                 // If has phone, use phone as primary key
                 if (row.phone) {
                     if (!uniqueData[row.phone]) {
+                        // Check if email or website already used
+                        if (row.email && usedEmails.has(row.email)) {
+                            row.email = null; // Mark as N/A if already used
+                        }
+                        if (row.website && usedWebsites.has(row.website)) {
+                            row.website = null; // Mark as N/A if already used
+                        }
+                        
+                        // Track used emails and websites
+                        if (row.email) usedEmails.add(row.email);
+                        if (row.website) usedWebsites.add(row.website);
+                        
                         uniqueData[row.phone] = row;
                     } else {
-                        // Merge additional info
-                        if (!uniqueData[row.phone].email && row.email) {
+                        // Merge additional info if not already present
+                        if (!uniqueData[row.phone].email && row.email && !usedEmails.has(row.email)) {
                             uniqueData[row.phone].email = row.email;
+                            usedEmails.add(row.email);
                         }
-                        if (!uniqueData[row.phone].website && row.website) {
+                        if (!uniqueData[row.phone].website && row.website && !usedWebsites.has(row.website)) {
                             uniqueData[row.phone].website = row.website;
+                            usedWebsites.add(row.website);
                         }
                         if (!uniqueData[row.phone].name && row.name) {
                             uniqueData[row.phone].name = row.name;
@@ -490,6 +530,18 @@
                     // No phone - create unique key from email or website
                     const key = row.email || row.website || row.name;
                     if (key && !uniqueData[key]) {
+                        // Check if email or website already used
+                        if (row.email && usedEmails.has(row.email)) {
+                            row.email = null;
+                        }
+                        if (row.website && usedWebsites.has(row.website)) {
+                            row.website = null;
+                        }
+                        
+                        // Track used emails and websites
+                        if (row.email) usedEmails.add(row.email);
+                        if (row.website) usedWebsites.add(row.website);
+                        
                         uniqueData[key] = row;
                     }
                 }
@@ -512,13 +564,38 @@
 
         function displayResults() {
             const totalRows = processedData.length;
+            const withNumber = processedData.filter(r => r.phone).length;
             const withEmail = processedData.filter(r => r.email).length;
             const withWebsite = processedData.filter(r => r.website).length;
+            
+            // Count unique companies (non-empty, non-N/A names)
+            const uniqueCompanyNames = new Set();
+            processedData.forEach(row => {
+                if (row.name && row.name !== 'N/A') {
+                    uniqueCompanyNames.add(row.name.toLowerCase().trim());
+                }
+            });
+            const uniqueCompanies = uniqueCompanyNames.size;
+            
+            // Calculate duplicates removed
+            const duplicatesRemoved = totalInputRows - totalRows;
+            
+            // Count complete records (has name, number, email, and website)
+            const completeRecords = processedData.filter(r => 
+                r.name && r.name !== 'N/A' && 
+                r.phone && r.phone !== 'N/A' && 
+                r.email && r.email !== 'N/A' && 
+                r.website && r.website !== 'N/A'
+            ).length;
 
             document.getElementById('inputRows').textContent = totalInputRows;
             document.getElementById('outputRows').textContent = totalRows;
+            document.getElementById('duplicatesRemoved').textContent = duplicatesRemoved;
+            document.getElementById('uniqueCompanies').textContent = uniqueCompanies;
+            document.getElementById('withNumber').textContent = withNumber;
             document.getElementById('withEmail').textContent = withEmail;
             document.getElementById('withWebsite').textContent = withWebsite;
+            document.getElementById('completeRecords').textContent = completeRecords;
 
             statsContainer.style.display = 'block';
 
