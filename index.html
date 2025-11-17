@@ -361,7 +361,7 @@
             if (!value) return null;
             const str = String(value).trim();
             
-            // Extract from wa.me/ links
+            // Extract from wa.me/ links (including full URLs)
             if (str.includes('wa.me/')) {
                 const match = str.match(/wa\.me\/(\+?\d+)/);
                 if (match) {
@@ -375,14 +375,16 @@
                 }
             }
             
-            // Extract any phone number
-            const phoneMatch = str.match(/[\+\d][\d\s\-\(\)]+/);
-            if (phoneMatch) {
-                const cleaned = phoneMatch[0].replace(/[\s\-\(\)]/g, '');
-                const digitsOnly = cleaned.replace(/\D/g, '');
-                // Only accept if 8 or more digits
-                if (digitsOnly.length >= 8) {
-                    return cleaned;
+            // Extract any phone number (but not if it looks like a URL)
+            if (!str.match(/^https?:\/\//i)) {
+                const phoneMatch = str.match(/[\+\d][\d\s\-\(\)]+/);
+                if (phoneMatch) {
+                    const cleaned = phoneMatch[0].replace(/[\s\-\(\)]/g, '');
+                    const digitsOnly = cleaned.replace(/\D/g, '');
+                    // Only accept if 8 or more digits
+                    if (digitsOnly.length >= 8) {
+                        return cleaned;
+                    }
                 }
             }
             
@@ -399,6 +401,11 @@
         function extractWebsite(value) {
             if (!value) return null;
             const str = String(value).trim();
+            
+            // Skip wa.me links as they are phone numbers
+            if (str.includes('wa.me/')) {
+                return null;
+            }
             
             if (str.match(/^(https?:\/\/|www\.)/i)) {
                 return str;
